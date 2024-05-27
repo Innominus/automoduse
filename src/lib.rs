@@ -105,14 +105,17 @@ pub fn dir(input: TokenStream) -> TokenStream {
     };
 
     let expanded = match source_file_names(dir) {
-        Ok(names) => names.into_iter().map(|name| mod_item(vis, name)).collect(),
+        Ok(names) => names
+            .into_iter()
+            .map(|name| mod_use_item(vis, name))
+            .collect(),
         Err(err) => syn::Error::new(Span::call_site(), err).to_compile_error(),
     };
 
     TokenStream::from(expanded)
 }
 
-fn mod_item(vis: &Visibility, name: String) -> TokenStream2 {
+fn mod_use_item(vis: &Visibility, name: String) -> TokenStream2 {
     let mut module_name = name.replace('-', "_");
     if module_name.starts_with(|ch: char| ch.is_ascii_digit()) {
         module_name.insert(0, '_');
@@ -129,6 +132,7 @@ fn mod_item(vis: &Visibility, name: String) -> TokenStream2 {
     quote! {
         #(#[path = #path])*
         #vis mod #ident;
+        #vis use #ident::*;
     }
 }
 
@@ -138,25 +142,30 @@ fn source_file_names<P: AsRef<Path>>(dir: P) -> Result<Vec<String>> {
 
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
-        if !entry.file_type()?.is_file() {
-            continue;
-        }
 
         let file_name = entry.file_name();
         if file_name == "mod.rs" || file_name == "lib.rs" || file_name == "main.rs" {
             continue;
         }
 
-        let path = Path::new(&file_name);
-        if path.extension() == Some(OsStr::new("rs")) {
-            match file_name.into_string() {
-                Ok(mut utf8) => {
+        let path = entry.path();
+        let file_type = entry.file_type()?;
+
+        let is_file_mod = file_type.is_file() && path.extension() == Some(OsStr::new("rs"));
+        let is_dir_mod = file_type.is_dir() && path.join("mod.rs").exists();
+        if !(is_file_mod || is_dir_mod) {
+            continue;
+        }
+
+        match file_name.into_string() {
+            Ok(mut utf8) => {
+                if is_file_mod {
                     utf8.truncate(utf8.len() - ".rs".len());
-                    names.push(utf8);
                 }
-                Err(non_utf8) => {
-                    failures.push(non_utf8);
-                }
+                names.push(utf8);
+            }
+            Err(non_utf8) => {
+                failures.push(non_utf8);
             }
         }
     }

@@ -1,5 +1,5 @@
 [package]
-name = "automod"
+name = "automoduse"
 version = "1.0.14"
 authors = ["David Tolnay <dtolnay@gmail.com>"]
 categories = ["development-tools::build-utils", "filesystem", "no-std", "no-std::no-alloc"]
